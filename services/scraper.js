@@ -13,16 +13,16 @@ const handleFetch = async (urls) => {
     for (const url of urls) {
       const response = {
         url,
-        status: STATUS.FAILED,
-        html: null,
+        status: STATUS.SUCCESS,
       };
 
       try {
         const page = await browser.newPage();
-        response.html = await fetchHTMLContent(page, url);
-        response.status = STATUS.SUCCESS;
+        const html = await fetchHTMLContent(page, url);
+        response.html = Buffer.from(html).toString("base64")
         await page.close();
       } catch(err) {
+        response.status = STATUS.FAILED;
         console.error(err);
       } finally {
         result.push(response);
