@@ -44,7 +44,7 @@ const fetchHTMLContent = async (page, url) => {
 
     retryCount = 0;
     previousScrollTop = scrollTop;
-    await page.mouse.wheel({ deltaX: 0, deltaY: 4000 });
+    await page.mouse.wheel(0, 4000);
     await delay(300);
   }
 
