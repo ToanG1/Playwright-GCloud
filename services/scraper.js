@@ -69,8 +69,7 @@ const handleFetch = async (urls) => {
         let page;
         try {
           page = await browser.newPage();
-          const html = await fetchHTMLContent(page, url);
-          response.html = Buffer.from(html).toString('base64');
+          response.html = await fetchHTMLContent(page, url);
         } catch (err) {
           response.status = STATUS.FAILED;
           console.error(`[ERROR] ${url}`, err);
