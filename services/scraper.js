@@ -1,43 +1,12 @@
 const { STATUS } = require('../enums/status');
 const { chromium } = require('playwright');
+const pLimit = require('p-limit');
 
 const MAX_DURATION = 30 * 1000;
 const MAX_RETRY_CHECK_ENDPOINT = 5;
+const CONCURRENCY_LIMIT = 5;
 
-const handleFetch = async (urls) => {
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-
-    const result = [];
-    for (const url of urls) {
-      const response = {
-        url,
-        status: STATUS.SUCCESS,
-      };
-
-      try {
-        const page = await browser.newPage();
-        const html = await fetchHTMLContent(page, url);
-        response.html = Buffer.from(html).toString("base64")
-        await page.close();
-      } catch(err) {
-        response.status = STATUS.FAILED;
-        console.error(err);
-      } finally {
-        result.push(response);
-      }
-    }
-
-    return result;
-  } catch {
-    return;
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
-  }
-};
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const fetchHTMLContent = async (page, url) => {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -75,15 +44,53 @@ const fetchHTMLContent = async (page, url) => {
 
     retryCount = 0;
     previousScrollTop = scrollTop;
-    await page.mouse.wheel(0, 4000);
+    await page.mouse.wheel({ deltaX: 0, deltaY: 4000 });
     await delay(300);
   }
 
   return await page.content();
 };
 
-function delay(ms) {
-  return new Promise((res) => setTimeout(res, ms));
-}
+const handleFetch = async (urls) => {
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const limit = pLimit(CONCURRENCY_LIMIT);
+    const results = [];
+
+    const tasks = urls.map((url) =>
+      limit(async () => {
+        const response = {
+          url,
+          status: STATUS.SUCCESS,
+          html: null,
+        };
+
+        let page;
+        try {
+          page = await browser.newPage();
+          const html = await fetchHTMLContent(page, url);
+          response.html = Buffer.from(html).toString('base64');
+        } catch (err) {
+          response.status = STATUS.FAILED;
+          console.error(`[ERROR] ${url}`, err);
+        } finally {
+          if (page) await page.close();
+          results.push(response);
+        }
+      })
+    );
+
+    await Promise.all(tasks);
+    return results;
+  } catch (err) {
+    console.error('Browser launch failed', err);
+    return null;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+};
 
 module.exports = { handleFetch };
