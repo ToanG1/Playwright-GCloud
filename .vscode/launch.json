@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Cloud Run: Run/Debug Locally",
+            "type": "cloudcode.cloudrun",
+            "request": "launch",
+            "build": {
+                "docker": {
+                    "path": "Dockerfile"
+                }
+            },
+            "image": "web-scraper",
+            "service": {
+                "name": "web-scraper",
+                "containerPort": 8080,
+                "resources": {
+                    "limits": {
+                        "cpu": 1,
+                        "memory": "1536Mi"
+                    }
+                }
+            },
+            "target": {
+                "minikube": {}
+            },
+            "watch": true
+        }
+    ]
+}
