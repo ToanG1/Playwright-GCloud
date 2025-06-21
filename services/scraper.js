@@ -1,10 +1,13 @@
 const { STATUS } = require('../enums/status');
-const { chromium } = require('playwright');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const pLimit = require('p-limit');
 
 const MAX_DURATION = 30 * 1000;
 const MAX_RETRY_CHECK_ENDPOINT = 5;
 const CONCURRENCY_LIMIT = 5;
+
+puppeteer.use(StealthPlugin());
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -13,46 +16,28 @@ const USER_AGENT =
 
 const fetchHTMLContent = async (page, url) => {
   // Block unnecessary resources
-  await page.route('**/*', (route) => {
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
     const blocked = ['image', 'stylesheet', 'font'];
-    if (blocked.includes(route.request().resourceType())) {
-      route.abort();
+    if (blocked.includes(req.resourceType())) {
+      req.abort();
     } else {
-      route.continue();
+      req.continue();
     }
   });
 
   // Set viewport and headers
-  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.setUserAgent(USER_AGENT);
   await page.setExtraHTTPHeaders({
     'Accept-Language': 'en-US,en;q=0.9',
-  });
-  await page.setUserAgent(USER_AGENT);
-
-  // Stealth patch
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-
-    window.navigator.chrome = { runtime: {} };
-
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => [1, 2, 3, 4, 5],
-    });
-
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['en-US', 'en'],
-    });
-
-    Object.defineProperty(navigator, 'maxTouchPoints', {
-      get: () => 1,
-    });
   });
 
   // Navigate to page
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
   // Prevent overflow hiding
-  await page.addInitScript(() => {
+  await page.evaluate(() => {
     const applyVisibleOverflow = () => {
       document.body.style.overflow = 'visible';
       document.documentElement.style.overflow = 'visible';
@@ -63,11 +48,6 @@ const fetchHTMLContent = async (page, url) => {
     const observer = new MutationObserver(applyVisibleOverflow);
     observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-  });
-
-  await page.evaluate(() => {
-    document.body.style.overflow = 'visible';
-    document.documentElement.style.overflow = 'visible';
   });
 
   // Scroll simulation
@@ -86,7 +66,7 @@ const fetchHTMLContent = async (page, url) => {
 
     retryCount = 0;
     previousScrollTop = scrollTop;
-    await page.mouse.wheel(0, 4000);
+    await page.evaluate(() => window.scrollBy(0, 4000));
     await delay(300);
   }
 
@@ -96,8 +76,11 @@ const fetchHTMLContent = async (page, url) => {
 const handleFetch = async (urls) => {
   let browser;
   try {
-    // HEADLESS FALSE for stealth
-    browser = await chromium.launch({ headless: true });
+    browser = await puppeteer.launch({
+      headless: true, // must be true for Cloud Run
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
     const limit = pLimit(CONCURRENCY_LIMIT);
     const results = [];
 
