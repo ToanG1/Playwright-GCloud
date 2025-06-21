@@ -97,7 +97,7 @@ const handleFetch = async (urls) => {
   let browser;
   try {
     // HEADLESS FALSE for stealth
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({ headless: 'new' });
     const limit = pLimit(CONCURRENCY_LIMIT);
     const results = [];
 
