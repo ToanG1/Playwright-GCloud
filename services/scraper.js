@@ -8,9 +8,50 @@ const CONCURRENCY_LIMIT = 5;
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+
 const fetchHTMLContent = async (page, url) => {
+  // Block unnecessary resources
+  await page.route('**/*', (route) => {
+    const blocked = ['image', 'stylesheet', 'font'];
+    if (blocked.includes(route.request().resourceType())) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+
+  // Set viewport and headers
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+  });
+  await page.setUserAgent(USER_AGENT);
+
+  // Stealth patch
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+
+    window.navigator.chrome = { runtime: {} };
+
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-US', 'en'],
+    });
+
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      get: () => 1,
+    });
+  });
+
+  // Navigate to page
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
+  // Prevent overflow hiding
   await page.addInitScript(() => {
     const applyVisibleOverflow = () => {
       document.body.style.overflow = 'visible';
@@ -29,6 +70,7 @@ const fetchHTMLContent = async (page, url) => {
     document.documentElement.style.overflow = 'visible';
   });
 
+  // Scroll simulation
   let previousScrollTop = -1;
   let retryCount = 0;
   const startTime = Date.now();
@@ -54,7 +96,8 @@ const fetchHTMLContent = async (page, url) => {
 const handleFetch = async (urls) => {
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    // HEADLESS FALSE for stealth
+    browser = await chromium.launch({ headless: false });
     const limit = pLimit(CONCURRENCY_LIMIT);
     const results = [];
 
