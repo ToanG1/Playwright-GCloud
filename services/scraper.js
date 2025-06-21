@@ -3,7 +3,7 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const pLimit = require('p-limit');
 
-const MAX_DURATION = 30 * 1000;
+const MAX_DURATION = 60 * 1000;
 const MAX_RETRY_CHECK_ENDPOINT = 5;
 const CONCURRENCY_LIMIT = 5;
 
@@ -15,7 +15,6 @@ const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
 const fetchHTMLContent = async (page, url) => {
-  // Block unnecessary resources
   await page.setRequestInterception(true);
   page.on('request', (req) => {
     const blocked = ['image', 'stylesheet', 'font'];
@@ -26,17 +25,14 @@ const fetchHTMLContent = async (page, url) => {
     }
   });
 
-  // Set viewport and headers
   await page.setViewport({ width: 1280, height: 720 });
   await page.setUserAgent(USER_AGENT);
   await page.setExtraHTTPHeaders({
     'Accept-Language': 'en-US,en;q=0.9',
   });
 
-  // Navigate to page
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-  // Prevent overflow hiding
   await page.evaluate(() => {
     const applyVisibleOverflow = () => {
       document.body.style.overflow = 'visible';
@@ -50,7 +46,6 @@ const fetchHTMLContent = async (page, url) => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
   });
 
-  // Scroll simulation
   let previousScrollTop = -1;
   let retryCount = 0;
   const startTime = Date.now();
@@ -77,7 +72,7 @@ const handleFetch = async (urls) => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: true, // must be true for Cloud Run
+      headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
